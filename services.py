@@ -106,6 +106,15 @@ class DBService:
             # --- FIN VALIDACIÓN ---
 
             perfil_data = args.get('perfil_json', {})
+
+            # --- VALIDACIÓN ADICIONAL ---
+            # 2. Verificar que el perfil no esté vacío
+            if not perfil_data or not any(perfil_data.values()):
+                return {
+                    "status": "info",
+                    "message": "No se guardó el perfil porque no se proporcionaron datos de preferencias."
+                }
+            # --- FIN VALIDACIÓN ADICIONAL ---
             
             result_prefs = await db.execute(
                 select(models.Preferencia).where(models.Preferencia.UsuarioId == user_id)
