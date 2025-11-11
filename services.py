@@ -95,36 +95,42 @@ class DBService:
 
     async def handle_guardar_perfil(self, db: AsyncSession, user_id: int, args: dict) -> dict:
         """Lógica para la herramienta 'guardar_perfil_alimentario'.
-           Recibe el user_id desde main.py, no desde la IA."""
+           Recibe el user_id desde main.py y los argumentos aplanados desde la IA."""
         try:
-            perfil_data = args.get('perfil_json', {})
-            if not perfil_data or all(not v for v in perfil_data.values()):
+            # Los argumentos ahora vienen directamente, no en un 'perfil_json' anidado.
+            # Convertimos los argumentos (que pueden ser MapComposite) a un dict normal.
+            perfil_data = dict(args)
+
+            # Validar que al menos uno de los campos tiene contenido.
+            if not any(perfil_data.values()):
                 return {
                     "status": "info",
                     "message": "No se guardó el perfil porque no se proporcionaron datos válidos de preferencias."
                 }
 
-            # Cargar el usuario con su preferencia (si existe)
-            result = await db.execute(
-                select(models.Usuario).options(joinedload(models.Usuario.preferencias))
-                .where(models.Usuario.Id == user_id)
-            )
-            usuario = result.scalars().first()
+            # Convertir el diccionario a un string JSON para guardarlo en la BD.
+            datos_str = json.dumps(perfil_data)
 
-            if not usuario:
-                return {"status": "error", "message": f"Error crítico: El usuario con ID {user_id} no existe."}
+            # Buscar una preferencia existente para este usuario.
+            result = await db.execute(select(models.Preferencia).where(models.Preferencia.UsuarioId == user_id))
+            preferencia = result.scalars().first()
 
-            perfil_json_str = json.dumps(dict(perfil_data))
-
-            if usuario.preferencias:
-                usuario.preferencias.DatosJson = perfil_json_str
-                usuario.preferencias.ActualizadoEn = func.now()
+            if preferencia:
+                # Si existe, actualizarla.
+                preferencia.DatosJson = datos_str
+                preferencia.ActualizadoEn = func.now()
             else:
-                # Directamente asignamos un nuevo objeto a la relación
-                usuario.preferencias = models.Preferencia(
-                    DatosJson=perfil_json_str,
-                    CreadoEn=func.now()
+                # Si no existe, crear una nueva.
+                # Asegurarse de que el usuario existe para evitar errores de FK.
+                user_result = await db.execute(select(models.Usuario.Id).where(models.Usuario.Id == user_id))
+                if not user_result.scalars().first():
+                    return {"status": "error", "message": f"Error crítico: El usuario con ID {user_id} no existe."}
+
+                preferencia = models.Preferencia(
+                    UsuarioId=user_id,
+                    DatosJson=datos_str
                 )
+                db.add(preferencia)
 
             await db.commit()
             
@@ -137,7 +143,7 @@ class DBService:
         except Exception as e:
             await db.rollback()
             traceback.print_exc()
-            return {"status": "error", "message": f"Error en handle_guardar_perfil: {e}"}
+            return {"status": "error", "message": f"Error al guardar el perfil: {e}"}
 
     async def handle_crear_reserva(self, db: AsyncSession, user_id: int, args: dict) -> dict:
         """Lógica para la herramienta 'crear_reserva'.
