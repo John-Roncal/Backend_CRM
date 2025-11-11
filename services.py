@@ -15,21 +15,13 @@ genai.configure(api_key=settings.GOOGLE_API_KEY)
 
 class GeminiService:
     def __init__(self):
-        """
-        El modelo ahora se inicializará dinámicamente en `start_chat_session`
-        para poder inyectar el system_prompt específico de la sesión.
-        """
         pass
 
     def start_chat_session(self, system_prompt: str, history: list = None):
-        """
-        Inicia una nueva sesión de chat, creando un modelo con el
-        prompt de sistema específico para esa sesión.
-        """
 
         # El modelo se instancia aquí, para cada sesión, con su prompt de sistema
         model = genai.GenerativeModel(
-            model_name="gemini-1.5-pro-latest",
+            model_name="gemini-2.5-flash",
             system_instruction=system_prompt,  # Inyecta el contexto y las reglas aquí
             tools=[chatbot_tools]
         )
