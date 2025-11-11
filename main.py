@@ -1,6 +1,6 @@
 import json
 import traceback
-import google.generativeai.types as genai_types
+import google.generativeai as genai
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -39,7 +39,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https*://localhost:7121",
+        "https://localhost:7121",
         "http://localhost:5123",
         "https://localhost:44327",
     ], 
@@ -154,6 +154,9 @@ async def chat_endpoint(
             function_name = function_call.name
             args = dict(function_call.args)
             
+            print(f"🔧 Llamada a función: {function_name}")
+            print(f"📥 Argumentos recibidos: {args}")
+            
             function_response_content = None
             
             # 4. Ejecutar la función correspondiente
@@ -161,7 +164,6 @@ async def chat_endpoint(
                 # --- CAMBIO AQUÍ ---
                 # Pasamos el session_user_id (de la solicitud) y los args (de la IA)
                 tool_result = await db_service.handle_guardar_perfil(db, session_user_id, args)
-                # ... (lógica de actualizar prompt si es necesario)
                 function_response_content = tool_result
 
             elif function_name == "crear_reserva":
@@ -173,11 +175,16 @@ async def chat_endpoint(
             if function_response_content is None:
                 raise HTTPException(status_code=400, detail=f"Función desconocida: {function_name}")
 
+            print(f"📤 Respuesta de función: {function_response_content}")
+
+            # ✅ CORRECCIÓN: Usar genai.protos.Part en lugar de genai_types.Part
             # 5. Enviar el resultado de la función de vuelta a Gemini
             response = await chat_session.send_message_async(
-                genai_types.Part.from_function_response(
-                    name=function_name,
-                    response=function_response_content
+                genai.protos.Part(
+                    function_response=genai.protos.FunctionResponse(
+                        name=function_name,
+                        response=function_response_content
+                    )
                 )
             )
         

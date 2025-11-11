@@ -92,13 +92,65 @@ class DBService:
         }
         return contexto
 
+    def _convert_to_dict(self, obj):
+        """
+        Convierte objetos de Gemini (MapComposite, RepeatedComposite, etc.) a diccionarios Python nativos.
+        """
+        # MapComposite de proto.marshal (Google)
+        if hasattr(obj, 'items') and callable(obj.items):
+            return {k: self._convert_to_dict(v) for k, v in obj.items()}
+        # Diccionarios normales
+        elif isinstance(obj, dict):
+            return {k: self._convert_to_dict(v) for k, v in obj.items()}
+        # Listas y tuplas
+        elif isinstance(obj, (list, tuple)):
+            return [self._convert_to_dict(item) for item in obj]
+        # RepeatedComposite (lista de protobuf)
+        elif hasattr(obj, '__iter__') and not isinstance(obj, (str, bytes, dict)):
+            try:
+                # Intentar convertir como lista
+                return [self._convert_to_dict(item) for item in obj]
+            except:
+                # Si falla, intentar como objeto con atributos
+                pass
+        # Objetos protobuf con DESCRIPTOR
+        if hasattr(obj, 'DESCRIPTOR'):
+            result = {}
+            for field in obj.DESCRIPTOR.fields:
+                value = getattr(obj, field.name)
+                result[field.name] = self._convert_to_dict(value)
+            return result
+        # Tipos primitivos (str, int, float, bool, None)
+        return obj
 
     async def handle_guardar_perfil(self, db: AsyncSession, user_id: int, args: dict) -> dict:
         """Lógica para la herramienta 'guardar_perfil_alimentario'.
            Recibe el user_id desde main.py, no desde la IA."""
         try:
             perfil_data = args.get('perfil_json', {})
-            if not perfil_data or all(not v for v in perfil_data.values()):
+            
+            print(f"📋 Perfil recibido (tipo: {type(perfil_data)}): {perfil_data}")
+            
+            # ✅ CORRECCIÓN: Convertir MapComposite/RepeatedComposite a dict nativo de Python
+            perfil_data_dict = self._convert_to_dict(perfil_data)
+            
+            print(f"📋 Perfil convertido (tipo: {type(perfil_data_dict)}): {perfil_data_dict}")
+            
+            # Si la conversión falló y es una lista, intentar convertir manualmente
+            if isinstance(perfil_data_dict, list):
+                print("⚠️ La conversión devolvió una lista, intentando conversión directa...")
+                # Convertir el MapComposite directamente a dict
+                perfil_data_dict = dict(perfil_data)
+                print(f"📋 Conversión directa: {perfil_data_dict}")
+            
+            # Validar que tengamos un diccionario
+            if not isinstance(perfil_data_dict, dict):
+                return {
+                    "status": "error",
+                    "message": f"Error: El perfil no se pudo convertir a diccionario. Tipo recibido: {type(perfil_data_dict)}"
+                }
+            
+            if not perfil_data_dict or all(not v for v in perfil_data_dict.values()):
                 return {
                     "status": "info",
                     "message": "No se guardó el perfil porque no se proporcionaron datos válidos de preferencias."
@@ -114,29 +166,52 @@ class DBService:
             if not usuario:
                 return {"status": "error", "message": f"Error crítico: El usuario con ID {user_id} no existe."}
 
-            perfil_json_str = json.dumps(dict(perfil_data))
+            # Ahora sí podemos serializar a JSON
+            perfil_json_str = json.dumps(perfil_data_dict, ensure_ascii=False)
+            print(f"💾 JSON a guardar: {perfil_json_str}")
+
+            # ✅ CORRECCIÓN: Usar datetime.utcnow() en lugar de func.now()
+            ahora = datetime.utcnow()
 
             if usuario.preferencias:
+                # Actualizar preferencia existente
                 usuario.preferencias.DatosJson = perfil_json_str
-                usuario.preferencias.ActualizadoEn = func.now()
+                usuario.preferencias.ActualizadoEn = ahora
+                print(f"✅ Actualizando preferencia existente para usuario {user_id}")
             else:
-                # Directamente asignamos un nuevo objeto a la relación
-                usuario.preferencias = models.Preferencia(
+                # Crear nueva preferencia
+                nueva_preferencia = models.Preferencia(
+                    UsuarioId=user_id,
                     DatosJson=perfil_json_str,
-                    CreadoEn=func.now()
+                    CreadoEn=ahora
                 )
+                db.add(nueva_preferencia)
+                print(f"✅ Creando nueva preferencia para usuario {user_id}")
 
+            # Commit de los cambios
             await db.commit()
+            
+            # Verificar que se guardó correctamente
+            result_check = await db.execute(
+                select(models.Preferencia).where(models.Preferencia.UsuarioId == user_id)
+            )
+            preferencia_guardada = result_check.scalars().first()
+            
+            if preferencia_guardada:
+                print(f"✅ Preferencia confirmada en BD: ID={preferencia_guardada.Id}, Datos={preferencia_guardada.DatosJson}")
+            else:
+                print(f"⚠️ Advertencia: No se encontró la preferencia después del commit")
             
             return {
                 "status": "exito", 
-                "message": f"Perfil alimentario guardado para el usuario {user_id}.",
+                "message": f"Perfil alimentario guardado exitosamente para el usuario {user_id}.",
                 "user_id": user_id
             }
 
         except Exception as e:
             await db.rollback()
             traceback.print_exc()
+            print(f"❌ Error en handle_guardar_perfil: {e}")
             return {"status": "error", "message": f"Error en handle_guardar_perfil: {e}"}
 
     async def handle_crear_reserva(self, db: AsyncSession, user_id: int, args: dict) -> dict:
