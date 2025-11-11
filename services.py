@@ -104,8 +104,13 @@ class DBService:
         """Lógica para la herramienta 'guardar_perfil_alimentario'.
            Recibe el user_id desde main.py, no desde la IA."""
         try:
-            if not user_id:
-                return {"status": "error", "message": "Error interno: No se pudo identificar al usuario."}
+            # --- VALIDACIÓN ---
+            # 1. Verificar que el usuario realmente existe
+            result_user = await db.execute(select(models.Usuario).where(models.Usuario.Id == user_id))
+            usuario = result_user.scalars().first()
+            if not usuario:
+                return {"status": "error", "message": f"Error crítico: El usuario con ID {user_id} no existe."}
+            # --- FIN VALIDACIÓN ---
 
             perfil_data = args.get('perfil_json', {})
             
@@ -145,13 +150,31 @@ class DBService:
             if not user_id:
                 return {"status": "error", "message": "Error interno: No se pudo identificar al usuario."}
 
+            experiencia_id = args.get('experiencia_id')
+
+            # --- VALIDACIÓN ---
+            # 1. Verificar que el experiencia_id existe
+            if experiencia_id:
+                result = await db.execute(
+                    select(models.Experiencia).where(models.Experiencia.Id == experiencia_id)
+                )
+                experiencia = result.scalars().first()
+                if not experiencia:
+                    return {
+                        "status": "error",
+                        "message": f"El ID de experiencia {experiencia_id} no es válido. Los IDs válidos son 1, 2 o 3. Por favor, pregunta de nuevo al usuario."
+                    }
+            else:
+                return {"status": "error", "message": "El campo 'experiencia_id' es obligatorio."}
+            # --- FIN VALIDACIÓN ---
+
             fecha_hora_dt = datetime.fromisoformat(args['fecha_hora'])
 
             nueva_reserva = models.Reserva(
                 UsuarioId=user_id,
                 NombreReserva=args['nombre_reserva'],
                 NumComensales=args['num_comensales'],
-                ExperienciaId=args['experiencia_id'],
+                ExperienciaId=experiencia_id,
                 FechaHora=fecha_hora_dt,
                 Restricciones=args.get('restricciones_adicionales'),
                 Estado='pendiente'
