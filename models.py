@@ -48,8 +48,8 @@ class Reserva(Base):
     Restricciones = Column(String(500))
     FechaHora = Column(DateTime, nullable=False)
     Estado = Column(String(30), nullable=False, default='pendiente')
-    CreadoEn = Column(DateTime, nullable=False, default=func.now()) # <-- COLUMNA AÑADIDA
-    ActualizadoEn = Column(DateTime, onupdate=func.now()) # <-- COLUMNA AÑADIDA
+    CreadoEn = Column(DateTime, nullable=False, server_default=func.now())
+    ActualizadoEn = Column(DateTime, onupdate=func.now())
     
     usuario = relationship("Usuario", back_populates="reservas")
     experiencia = relationship("Experiencia")
@@ -61,7 +61,7 @@ class Preferencia(Base):
     Id = Column(Integer, Identity(), primary_key=True)
     UsuarioId = Column(Integer, ForeignKey('dbo.Usuarios.Id', ondelete="CASCADE"), nullable=False)
     DatosJson = Column(Text, nullable=True)
-    CreadoEn = Column(DateTime, nullable=False, default=func.now())
+    CreadoEn = Column(DateTime, nullable=False, server_default=func.now())
     ActualizadoEn = Column(DateTime, onupdate=func.now())
     
     usuario = relationship("Usuario", back_populates="preferencias")
