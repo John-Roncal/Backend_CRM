@@ -181,11 +181,20 @@ async def chat_endpoint(
             )
         
         # 6. La respuesta final
-        final_text_response = response.text
+        try:
+            final_text_response = response.text
+        except ValueError:
+            # Esto ocurre si la respuesta final de Gemini es una llamada a función
+            # en lugar de texto. Devolvemos un mensaje genérico para que el usuario
+            # pueda intentarlo de nuevo.
+            final_text_response = "Tuve un problema para procesar la respuesta. Por favor, intenta de nuevo."
+
         return schemas.ChatResponse(response=final_text_response, session_id=session_id)
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # El manejador global capturará esto, pero lo dejamos por si acaso
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error en chat_endpoint: {str(e)}")
 
 @app.get("/")
 def read_root():
