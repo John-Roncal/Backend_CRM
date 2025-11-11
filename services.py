@@ -129,8 +129,7 @@ class DBService:
             else:
                 preferencia = models.Preferencia(
                     UsuarioId=user_id,
-                    DatosJson=perfil_json_str,
-                    CreadoEn=func.now()
+                    DatosJson=perfil_json_str
                 )
                 db.add(preferencia)
                 
