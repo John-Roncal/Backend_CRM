@@ -1,6 +1,5 @@
 import json
 import traceback
-import google.generativeai.types as genai_types
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -177,10 +176,10 @@ async def chat_endpoint(
 
             # 5. Enviar el resultado de la función de vuelta a Gemini
             response = await chat_session.send_message_async(
-                genai_types.Part.from_function_response(
-                    name=function_name,
-                    response=function_response_content
-                )
+                [{"function_response": {
+                    "name": function_name,
+                    "response": function_response_content
+                }}]
             )
         
         # 6. La respuesta final
