@@ -60,7 +60,7 @@ class Preferencia(Base):
 
     Id = Column(Integer, Identity(), primary_key=True)
     UsuarioId = Column(Integer, ForeignKey('dbo.Usuarios.Id', ondelete="CASCADE"), nullable=False)
-    DatosJson = Column(Text, nullable=True)
+    DatosJson = Column(String, nullable=True)
     CreadoEn = Column(DateTime, nullable=False, default=func.now())
     ActualizadoEn = Column(DateTime, onupdate=func.now())
     

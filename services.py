@@ -92,6 +92,36 @@ class DBService:
         }
         return contexto
 
+    def _convert_to_dict(self, obj):
+        """
+        Convierte objetos de Gemini (MapComposite, RepeatedComposite, etc.) a diccionarios Python nativos.
+        """
+        # MapComposite de proto.marshal (Google)
+        if hasattr(obj, 'items') and callable(obj.items):
+            return {k: self._convert_to_dict(v) for k, v in obj.items()}
+        # Diccionarios normales
+        elif isinstance(obj, dict):
+            return {k: self._convert_to_dict(v) for k, v in obj.items()}
+        # Listas y tuplas
+        elif isinstance(obj, (list, tuple)):
+            return [self._convert_to_dict(item) for item in obj]
+        # RepeatedComposite (lista de protobuf)
+        elif hasattr(obj, '__iter__') and not isinstance(obj, (str, bytes, dict)):
+            try:
+                # Intentar convertir como lista
+                return [self._convert_to_dict(item) for item in obj]
+            except:
+                # Si falla, intentar como objeto con atributos
+                pass
+        # Objetos protobuf con DESCRIPTOR
+        if hasattr(obj, 'DESCRIPTOR'):
+            result = {}
+            for field in obj.DESCRIPTOR.fields:
+                value = getattr(obj, field.name)
+                result[field.name] = self._convert_to_dict(value)
+            return result
+        # Tipos primitivos (str, int, float, bool, None)
+        return obj
 
     async def handle_guardar_perfil(self, db: AsyncSession, user_id: int, args: dict) -> dict:
         """Lógica para la herramienta 'guardar_perfil_alimentario'.
@@ -132,11 +162,23 @@ class DBService:
                 )
                 db.add(preferencia)
 
+            # Commit de los cambios
             await db.commit()
+            
+            # Verificar que se guardó correctamente
+            result_check = await db.execute(
+                select(models.Preferencia).where(models.Preferencia.UsuarioId == user_id)
+            )
+            preferencia_guardada = result_check.scalars().first()
+            
+            if preferencia_guardada:
+                print(f"✅ Preferencia confirmada en BD: ID={preferencia_guardada.Id}, Datos={preferencia_guardada.DatosJson}")
+            else:
+                print(f"⚠️ Advertencia: No se encontró la preferencia después del commit")
             
             return {
                 "status": "exito", 
-                "message": f"Perfil alimentario guardado para el usuario {user_id}.",
+                "message": f"Perfil alimentario guardado exitosamente para el usuario {user_id}.",
                 "user_id": user_id
             }
 
