@@ -7,18 +7,27 @@ guardar_perfil_alimentario = FunctionDeclaration(
     parameters={
         "type": "OBJECT",
         "properties": {
-            "perfil_json": {
-                "type": "OBJECT",
-                "description": "Objeto JSON con las preferencias alimentarias actualizadas.",
-                "properties": {
-                    "alergias": {"type": "ARRAY", "items": {"type": "STRING"}, "description": "Lista de alergias (ej: 'nueces', 'mariscos')."},
-                    "restricciones": {"type": "ARRAY", "items": {"type": "STRING"}, "description": "Lista de restricciones dietéticas (ej: 'vegano', 'sin gluten')."},
-                    "disgustos": {"type": "ARRAY", "items": {"type": "STRING"}, "description": "Lista de ingredientes que no le gustan."},
-                    "gustos": {"type": "ARRAY", "items": {"type": "STRING"}, "description": "Lista de ingredientes o sabores que le gustan."}
-                }
+            "alergias": {
+                "type": "ARRAY",
+                "items": {"type": "STRING"},
+                "description": "Lista de alergias declaradas por el usuario (ej: 'nueces', 'mariscos')."
+            },
+            "restricciones": {
+                "type": "ARRAY",
+                "items": {"type": "STRING"},
+                "description": "Lista de restricciones dietéticas (ej: 'vegano', 'sin gluten')."
+            },
+            "disgustos": {
+                "type": "ARRAY",
+                "items": {"type": "STRING"},
+                "description": "Lista de ingredientes que no le gustan al usuario."
+            },
+            "gustos": {
+                "type": "ARRAY",
+                "items": {"type": "STRING"},
+                "description": "Lista de ingredientes o sabores que le gustan al usuario."
             }
-        },
-        "required": ["perfil_json"]
+        }
     }
 )
 

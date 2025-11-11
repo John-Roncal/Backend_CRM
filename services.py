@@ -125,68 +125,42 @@ class DBService:
 
     async def handle_guardar_perfil(self, db: AsyncSession, user_id: int, args: dict) -> dict:
         """Lógica para la herramienta 'guardar_perfil_alimentario'.
-           Recibe el user_id desde main.py, no desde la IA."""
+           Recibe el user_id desde main.py y los argumentos aplanados desde la IA."""
         try:
-            perfil_data = args.get('perfil_json', {})
-            
-            print(f"📋 Perfil recibido (tipo: {type(perfil_data)}): {perfil_data}")
-            
-            # ✅ CORRECCIÓN: Convertir MapComposite/RepeatedComposite a dict nativo de Python
-            perfil_data_dict = self._convert_to_dict(perfil_data)
-            
-            print(f"📋 Perfil convertido (tipo: {type(perfil_data_dict)}): {perfil_data_dict}")
-            
-            # Si la conversión falló y es una lista, intentar convertir manualmente
-            if isinstance(perfil_data_dict, list):
-                print("⚠️ La conversión devolvió una lista, intentando conversión directa...")
-                # Convertir el MapComposite directamente a dict
-                perfil_data_dict = dict(perfil_data)
-                print(f"📋 Conversión directa: {perfil_data_dict}")
-            
-            # Validar que tengamos un diccionario
-            if not isinstance(perfil_data_dict, dict):
-                return {
-                    "status": "error",
-                    "message": f"Error: El perfil no se pudo convertir a diccionario. Tipo recibido: {type(perfil_data_dict)}"
-                }
-            
-            if not perfil_data_dict or all(not v for v in perfil_data_dict.values()):
+            # Los argumentos ahora vienen directamente, no en un 'perfil_json' anidado.
+            # Convertimos los argumentos (que pueden ser MapComposite) a un dict normal.
+            perfil_data = dict(args)
+
+            # Validar que al menos uno de los campos tiene contenido.
+            if not any(perfil_data.values()):
                 return {
                     "status": "info",
                     "message": "No se guardó el perfil porque no se proporcionaron datos válidos de preferencias."
                 }
 
-            # Cargar el usuario con su preferencia (si existe)
-            result = await db.execute(
-                select(models.Usuario).options(joinedload(models.Usuario.preferencias))
-                .where(models.Usuario.Id == user_id)
-            )
-            usuario = result.scalars().first()
+            # Convertir el diccionario a un string JSON para guardarlo en la BD.
+            datos_str = json.dumps(perfil_data)
 
-            if not usuario:
-                return {"status": "error", "message": f"Error crítico: El usuario con ID {user_id} no existe."}
+            # Buscar una preferencia existente para este usuario.
+            result = await db.execute(select(models.Preferencia).where(models.Preferencia.UsuarioId == user_id))
+            preferencia = result.scalars().first()
 
-            # Ahora sí podemos serializar a JSON
-            perfil_json_str = json.dumps(perfil_data_dict, ensure_ascii=False)
-            print(f"💾 JSON a guardar: {perfil_json_str}")
-
-            # ✅ CORRECCIÓN: Usar datetime.utcnow() en lugar de func.now()
-            ahora = datetime.utcnow()
-
-            if usuario.preferencias:
-                # Actualizar preferencia existente
-                usuario.preferencias.DatosJson = perfil_json_str
-                usuario.preferencias.ActualizadoEn = ahora
-                print(f"✅ Actualizando preferencia existente para usuario {user_id}")
+            if preferencia:
+                # Si existe, actualizarla.
+                preferencia.DatosJson = datos_str
+                preferencia.ActualizadoEn = func.now()
             else:
-                # Crear nueva preferencia
-                nueva_preferencia = models.Preferencia(
+                # Si no existe, crear una nueva.
+                # Asegurarse de que el usuario existe para evitar errores de FK.
+                user_result = await db.execute(select(models.Usuario.Id).where(models.Usuario.Id == user_id))
+                if not user_result.scalars().first():
+                    return {"status": "error", "message": f"Error crítico: El usuario con ID {user_id} no existe."}
+
+                preferencia = models.Preferencia(
                     UsuarioId=user_id,
-                    DatosJson=perfil_json_str,
-                    CreadoEn=ahora
+                    DatosJson=datos_str
                 )
-                db.add(nueva_preferencia)
-                print(f"✅ Creando nueva preferencia para usuario {user_id}")
+                db.add(preferencia)
 
             # Commit de los cambios
             await db.commit()
@@ -211,8 +185,7 @@ class DBService:
         except Exception as e:
             await db.rollback()
             traceback.print_exc()
-            print(f"❌ Error en handle_guardar_perfil: {e}")
-            return {"status": "error", "message": f"Error en handle_guardar_perfil: {e}"}
+            return {"status": "error", "message": f"Error al guardar el perfil: {e}"}
 
     async def handle_crear_reserva(self, db: AsyncSession, user_id: int, args: dict) -> dict:
         """Lógica para la herramienta 'crear_reserva'.
