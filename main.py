@@ -1,5 +1,7 @@
 import json
-from fastapi import FastAPI, Depends, HTTPException
+import traceback
+from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Optional
@@ -12,6 +14,25 @@ app = FastAPI(
     title="CRM Sensorial - Central Restaurante",
     description="Backend para el chatbot de reservas con Gemini"
 )
+
+# --- Manejador de Excepciones Global ---
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """
+    Captura cualquier excepción no controlada, la imprime en consola
+    y devuelve una respuesta JSON estandarizada.
+    """
+    # Imprimir el traceback completo en la consola para debugging
+    traceback.print_exc()
+
+    return JSONResponse(
+        status_code=500,
+        content={
+            "status": "error",
+            "message": f"Ocurrió un error interno inesperado: {exc}",
+            "traceback": traceback.format_exc()
+        },
+    )
 
 # --- Configuración de CORS ---
 app.add_middleware(
