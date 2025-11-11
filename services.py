@@ -114,7 +114,7 @@ class DBService:
             if not usuario:
                 return {"status": "error", "message": f"Error crítico: El usuario con ID {user_id} no existe."}
 
-            perfil_json_str = json.dumps(perfil_data)
+            perfil_json_str = json.dumps(dict(perfil_data))
 
             if usuario.preferencias:
                 usuario.preferencias.DatosJson = perfil_json_str
