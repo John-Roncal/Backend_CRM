@@ -73,11 +73,9 @@ async def get_system_prompt(db: AsyncSession, user_id: int) -> str:
         "NUNCA inventes una experiencia. Solo existen las 3 que te doy."
         f"{experiencias_contexto}"
     )
-    print(experiencias_contexto)
 
     # 2. Obtener contexto del usuario
     user_contexto = await db_service.get_user_context(db, user_id)
-    print(user_contexto)
 
     # 3. VERIFICAR SI EL PERFIL EXISTE
     perfil_existente = None
