@@ -81,7 +81,7 @@ class DBService:
         # Formatear el contexto para el prompt
         contexto = {
             "usuario": {"id": usuario.Id, "nombre": usuario.Nombre, "email": usuario.Email},
-            "perfil_alimentario": json.loads(usuario.preferencias.DatosJson) if usuario.preferencias else "Sin perfil.",
+            "perfil_alimentario": json.loads(usuario.preferencias.DatosJson) if usuario.preferencias and usuario.preferencias.DatosJson else "Sin perfil.",
             "historial_reservas": [
                 {
                     "fecha": r.FechaHora, 
@@ -107,12 +107,12 @@ class DBService:
 
             perfil_data = args.get('perfil_json', {})
 
-            # --- VALIDACIÓN ADICIONAL ---
-            # 2. Verificar que el perfil no esté vacío
-            if not perfil_data or not any(perfil_data.values()):
+            # --- VALIDACIÓN ADICIONAL MEJORADA ---
+            # 2. Verificar que el perfil no esté vacío (que alguna de sus listas internas tenga datos)
+            if not perfil_data or all(not v for v in perfil_data.values()):
                 return {
                     "status": "info",
-                    "message": "No se guardó el perfil porque no se proporcionaron datos de preferencias."
+                    "message": "No se guardó el perfil porque no se proporcionaron datos válidos de preferencias."
                 }
             # --- FIN VALIDACIÓN ADICIONAL ---
             
@@ -129,7 +129,8 @@ class DBService:
             else:
                 preferencia = models.Preferencia(
                     UsuarioId=user_id,
-                    DatosJson=perfil_json_str
+                    DatosJson=perfil_json_str,
+                    CreadoEn=func.now()
                 )
                 db.add(preferencia)
                 
