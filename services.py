@@ -97,42 +97,35 @@ class DBService:
         """Lógica para la herramienta 'guardar_perfil_alimentario'.
            Recibe el user_id desde main.py, no desde la IA."""
         try:
-            # --- VALIDACIÓN ---
-            # 1. Verificar que el usuario realmente existe
-            result_user = await db.execute(select(models.Usuario).where(models.Usuario.Id == user_id))
-            usuario = result_user.scalars().first()
-            if not usuario:
-                return {"status": "error", "message": f"Error crítico: El usuario con ID {user_id} no existe."}
-            # --- FIN VALIDACIÓN ---
-
             perfil_data = args.get('perfil_json', {})
-
-            # --- VALIDACIÓN ADICIONAL MEJORADA ---
-            # 2. Verificar que el perfil no esté vacío (que alguna de sus listas internas tenga datos)
             if not perfil_data or all(not v for v in perfil_data.values()):
                 return {
                     "status": "info",
                     "message": "No se guardó el perfil porque no se proporcionaron datos válidos de preferencias."
                 }
-            # --- FIN VALIDACIÓN ADICIONAL ---
-            
-            result_prefs = await db.execute(
-                select(models.Preferencia).where(models.Preferencia.UsuarioId == user_id)
+
+            # Cargar el usuario con su preferencia (si existe)
+            result = await db.execute(
+                select(models.Usuario).options(joinedload(models.Usuario.preferencias))
+                .where(models.Usuario.Id == user_id)
             )
-            preferencia = result_prefs.scalars().first()
-            
+            usuario = result.scalars().first()
+
+            if not usuario:
+                return {"status": "error", "message": f"Error crítico: El usuario con ID {user_id} no existe."}
+
             perfil_json_str = json.dumps(perfil_data)
 
-            if preferencia:
-                preferencia.DatosJson = perfil_json_str
-                preferencia.ActualizadoEn = func.now()
+            if usuario.preferencias:
+                usuario.preferencias.DatosJson = perfil_json_str
+                usuario.preferencias.ActualizadoEn = func.now()
             else:
-                preferencia = models.Preferencia(
-                    UsuarioId=user_id,
-                    DatosJson=perfil_json_str
+                # Directamente asignamos un nuevo objeto a la relación
+                usuario.preferencias = models.Preferencia(
+                    DatosJson=perfil_json_str,
+                    CreadoEn=func.now()
                 )
-                db.add(preferencia)
-                
+
             await db.commit()
             
             return {
