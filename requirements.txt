@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+sqlalchemy[asyncio]
+aioodbc
+pydantic
+pydantic-settings
+pydantic[email]
+google-generativeai
+python-dotenv

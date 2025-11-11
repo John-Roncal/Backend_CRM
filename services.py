@@ -1,0 +1,160 @@
+import google.generativeai as genai
+import json
+from sqlalchemy import func
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from sqlalchemy.orm import joinedload
+from datetime import datetime
+import models
+import schemas
+from database import settings
+from tools import chatbot_tools
+
+# Configurar el cliente de Gemini
+genai.configure(api_key=settings.GOOGLE_API_KEY)
+
+class GeminiService:
+    def __init__(self):
+        self.model = genai.GenerativeModel(
+            model_name="gemini-2.5-pro",
+            tools=[chatbot_tools]
+        )
+
+    def start_chat_session(self, system_prompt: str, history: list = None):
+        """Inicia una nueva sesión de chat con un prompt de sistema y un historial."""
+        chat_history = []
+        if history:
+            for msg in history:
+                chat_history.append({"role": msg["role"], "parts": [msg["parts"]]})
+
+        return self.model.start_chat(
+            history=chat_history,
+            enable_automatic_function_calling=False # Lo haremos manual para más control
+        )
+
+    async def generate_response(self, chat_session, user_message: str):
+        """Envía un mensaje y obtiene la respuesta, manejando function calling."""
+
+        response = await chat_session.send_message_async(user_message)
+        
+        return response
+
+class DBService:
+    
+    async def get_all_experiences(self, db: AsyncSession) -> str:
+        """Obtiene las 3 experiencias de la BD para dárselas al chatbot como contexto."""
+        result = await db.execute(select(models.Experiencia).where(models.Experiencia.Activa == True))
+        experiencias = result.scalars().all()
+        
+        experiencias_texto = "\n\n--- EXPERIENCIAS DISPONIBLES ---\n"
+        for exp in experiencias:
+            experiencias_texto += f"ID: {exp.Id}\n"
+            experiencias_texto += f"Nombre: {exp.Nombre}\n"
+            experiencias_texto += f"Descripción: {exp.Descripcion}\n"
+            experiencias_texto += f"Precio: S/ {exp.Precio}\n"
+            experiencias_texto += "---\n"
+        return experiencias_texto
+
+    async def get_user_context(self, db: AsyncSession, user_id: int) -> dict:
+        """Obtiene los datos del usuario, su perfil y su historial para el contexto."""
+        if not user_id:
+            return None
+        
+        result = await db.execute(
+            select(models.Usuario)
+            .options(
+                joinedload(models.Usuario.preferencias),
+                joinedload(models.Usuario.reservas)
+            )
+            .where(models.Usuario.Id == user_id)
+        )
+        usuario = result.scalars().first()
+
+        if not usuario:
+            return None
+        
+        # Formatear el contexto para el prompt
+        contexto = {
+            "usuario": {"id": usuario.Id, "nombre": usuario.Nombre, "email": usuario.Email},
+            "perfil_alimentario": json.loads(usuario.preferencias.DatosJson) if usuario.preferencias else "Sin perfil.",
+            "historial_reservas": [
+                {
+                    "fecha": r.FechaHora, 
+                    "experiencia_id": r.ExperienciaId, 
+                    "estado": r.Estado
+                } for r in usuario.reservas if r.Estado == 'completada'
+            ]
+        }
+        return contexto
+
+
+    async def handle_guardar_perfil(self, db: AsyncSession, user_id: int, args: dict) -> dict:
+        """Lógica para la herramienta 'guardar_perfil_alimentario'.
+           Recibe el user_id desde main.py, no desde la IA."""
+        try:
+            if not user_id:
+                return {"status": "error", "message": "Error interno: No se pudo identificar al usuario."}
+
+            perfil_data = args.get('perfil_json', {})
+            
+            result_prefs = await db.execute(
+                select(models.Preferencia).where(models.Preferencia.UsuarioId == user_id)
+            )
+            preferencia = result_prefs.scalars().first()
+            
+            perfil_json_str = json.dumps(perfil_data)
+
+            if preferencia:
+                preferencia.DatosJson = perfil_json_str
+                preferencia.ActualizadoEn = func.now()
+            else:
+                preferencia = models.Preferencia(
+                    UsuarioId=user_id,
+                    DatosJson=perfil_json_str
+                )
+                db.add(preferencia)
+                
+            await db.commit()
+            
+            return {
+                "status": "exito", 
+                "message": f"Perfil alimentario guardado para el usuario {user_id}.",
+                "user_id": user_id
+            }
+
+        except Exception as e:
+            await db.rollback()
+            return {"status": "error", "message": str(e)}
+
+    async def handle_crear_reserva(self, db: AsyncSession, user_id: int, args: dict) -> dict:
+        """Lógica para la herramienta 'crear_reserva'.
+           Recibe el user_id desde main.py, no desde la IA."""
+        try:
+            if not user_id:
+                return {"status": "error", "message": "Error interno: No se pudo identificar al usuario."}
+
+            fecha_hora_dt = datetime.fromisoformat(args['fecha_hora'])
+
+            nueva_reserva = models.Reserva(
+                UsuarioId=user_id,
+                NombreReserva=args['nombre_reserva'],
+                NumComensales=args['num_comensales'],
+                ExperienciaId=args['experiencia_id'],
+                FechaHora=fecha_hora_dt,
+                Restricciones=args.get('restricciones_adicionales'),
+                Estado='pendiente'
+            )
+            
+            db.add(nueva_reserva)
+            await db.commit()
+            await db.refresh(nueva_reserva)
+            
+            return {
+                "status": "exito",
+                "message": f"Reserva creada con éxito. ID de reserva: {nueva_reserva.Id}.",
+                "reserva_id": nueva_reserva.Id
+            }
+        
+        except Exception as e:
+            await db.rollback()
+            return {"status": "error", "message": str(e)}
