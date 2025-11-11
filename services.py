@@ -1,5 +1,6 @@
 import google.generativeai as genai
 import json
+import traceback
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -141,7 +142,8 @@ class DBService:
 
         except Exception as e:
             await db.rollback()
-            return {"status": "error", "message": str(e)}
+            traceback.print_exc()
+            return {"status": "error", "message": f"Error en handle_guardar_perfil: {e}"}
 
     async def handle_crear_reserva(self, db: AsyncSession, user_id: int, args: dict) -> dict:
         """Lógica para la herramienta 'crear_reserva'.
@@ -192,4 +194,5 @@ class DBService:
         
         except Exception as e:
             await db.rollback()
-            return {"status": "error", "message": str(e)}
+            traceback.print_exc()
+            return {"status": "error", "message": f"Error en handle_crear_reserva: {e}"}
