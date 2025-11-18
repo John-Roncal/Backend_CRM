@@ -169,6 +169,10 @@ async def chat_endpoint(
                 # Pasamos el session_user_id (de la solicitud) y los args (de la IA)
                 tool_result = await db_service.handle_crear_reserva(db, session_user_id, args)
                 function_response_content = tool_result
+
+            elif function_name == "recomendar_experiencia":
+                tool_result = await db_service.handle_recomendar_experiencia(db, session_user_id, args)
+                function_response_content = tool_result
             
             if function_response_content is None:
                 raise HTTPException(status_code=400, detail=f"Función desconocida: {function_name}")

@@ -63,5 +63,29 @@ crear_reserva = FunctionDeclaration(
     }
 )
 
+# 3. Herramienta para obtener una recomendación de experiencia
+recomendar_experiencia = FunctionDeclaration(
+    name="recomendar_experiencia",
+    description="Cuando el usuario pida una recomendación o no sepa qué elegir, esta herramienta recopila sus preferencias para poder sugerirle la mejor experiencia.",
+    parameters={
+        "type": "OBJECT",
+        "properties": {
+            "motivo_visita": {
+                "type": "STRING",
+                "description": "¿Qué te trae hoy a Central? (Celebración Especial, Negocios, Turismo, Otros)"
+            },
+            "acompanantes": {
+                "type": "STRING",
+                "description": "¿Con quién vienes? (Solo, Pareja, Familia, Amigos)"
+            },
+            "estilo_cocina": {
+                "type": "STRING",
+                "description": "¿Qué estilo de cocina te atrae más? (Tradicional/Criolla, Moderna/Fusión, Vegana, Gourmet)"
+            }
+        },
+        "required": ["motivo_visita", "acompanantes", "estilo_cocina"]
+    }
+)
+
 # Lista de herramientas para el modelo
-chatbot_tools = Tool(function_declarations=[guardar_perfil_alimentario, crear_reserva])
+chatbot_tools = Tool(function_declarations=[guardar_perfil_alimentario, crear_reserva, recomendar_experiencia])
