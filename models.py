@@ -65,3 +65,18 @@ class Preferencia(Base):
     ActualizadoEn = Column(DateTime, onupdate=func.now())
     
     usuario = relationship("Usuario", back_populates="preferencias")
+
+class RecomendacionesLog(Base):
+    __tablename__ = 'RecomendacionesLog'
+    __table_args__ = {'schema': 'dbo'}
+
+    Id = Column(Integer, Identity(), primary_key=True)
+    UsuarioId = Column(Integer, ForeignKey('dbo.Usuarios.Id', ondelete="SET NULL"), nullable=True)
+    MotivoVisita = Column(String(100))
+    Acompanantes = Column(String(100))
+    EstiloCocina = Column(String(100))
+    ExperienciaRecomendadaId = Column(Integer, ForeignKey('dbo.Experiencias.Id'), nullable=True)
+    CreadoEn = Column(DateTime, nullable=False, default=func.now())
+
+    usuario = relationship("Usuario")
+    experiencia_recomendada = relationship("Experiencia")

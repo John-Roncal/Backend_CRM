@@ -195,3 +195,56 @@ class DBService:
             await db.rollback()
             traceback.print_exc()
             return {"status": "error", "message": f"Error en handle_crear_reserva: {e}"}
+
+    async def handle_recomendar_experiencia(self, db: AsyncSession, user_id: int, args: dict) -> dict:
+        """
+        Lógica para la herramienta 'recomendar_experiencia'.
+        Analiza las preferencias del usuario, elige una experiencia y lo registra.
+        """
+        try:
+            motivo = args.get('motivo_visita')
+            acompanantes = args.get('acompanantes')
+            estilo_cocina = args.get('estilo_cocina')
+
+            # --- Lógica de recomendación simple (puede ser más compleja) ---
+            experiencia_recomendada_id = 1  # Default
+            if "gourmet" in estilo_cocina.lower() or "fusión" in estilo_cocina.lower():
+                experiencia_recomendada_id = 2
+            elif "vegana" in estilo_cocina.lower():
+                experiencia_recomendada_id = 3
+            elif motivo.lower() in ["celebración especial", "negocios"]:
+                 experiencia_recomendada_id = 2
+
+
+            # Loggear la recomendación
+            nuevo_log = models.RecomendacionesLog(
+                UsuarioId=user_id,
+                MotivoVisita=motivo,
+                Acompanantes=acompanantes,
+                EstiloCocina=estilo_cocina,
+                ExperienciaRecomendadaId=experiencia_recomendada_id
+            )
+            db.add(nuevo_log)
+            await db.commit()
+
+            # Obtener los detalles de la experiencia para devolverlos
+            result = await db.execute(
+                select(models.Experiencia).where(models.Experiencia.Id == experiencia_recomendada_id)
+            )
+            experiencia_obj = result.scalars().first()
+
+            return {
+                "status": "exito",
+                "message": f"Basado en tus preferencias, te recomiendo la experiencia '{experiencia_obj.Nombre}'.",
+                "experiencia_recomendada": {
+                    "id": experiencia_obj.Id,
+                    "nombre": experiencia_obj.Nombre,
+                    "descripcion": experiencia_obj.Descripcion,
+                    "precio": float(experiencia_obj.Precio)
+                }
+            }
+
+        except Exception as e:
+            await db.rollback()
+            traceback.print_exc()
+            return {"status": "error", "message": f"Error en handle_recomendar_experiencia: {e}"}
